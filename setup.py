@@ -27,6 +27,7 @@ setup(
         'depthai',
         'depthai-nodes',
         'lap',
+        'pyserial',
         'pyvesc',
         'ultralytics',
     ],

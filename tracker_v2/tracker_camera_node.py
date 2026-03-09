@@ -19,7 +19,6 @@ import numpy as np
 import rclpy
 import ultralytics
 from ament_index_python.packages import get_package_share_directory
-from cv_bridge import CvBridge
 from depthai_nodes.node import ParsingNeuralNetwork
 from geometry_msgs.msg import Point
 from rclpy.node import Node
@@ -361,7 +360,6 @@ class TrackerCameraNode(Node):
         self.error_pub = self.create_publisher(Float32MultiArray, '/tracking_error', 10)
         self.state_pub = self.create_publisher(String, '/tracker/state', 10)
         self.target_pub = self.create_publisher(Int32, '/tracker/target_id', 10)
-        self.bridge = CvBridge()
 
         self.create_subscription(Point, '/tracker/select_point', self._select_point_cb, 10)
         self.create_subscription(Empty, '/tracker/cancel', self._cancel_cb, 10)
@@ -512,9 +510,24 @@ class TrackerCameraNode(Node):
         return cv2.applyColorMap(normalized, cv2.COLORMAP_JET)
 
     def _publish_image(self, publisher, frame: np.ndarray) -> None:
-        msg = self.bridge.cv2_to_imgmsg(frame, encoding='bgr8')
+        frame = np.ascontiguousarray(frame)
+        msg = Image()
         msg.header.stamp = self.get_clock().now().to_msg()
         msg.header.frame_id = self.image_frame_id
+        msg.height = int(frame.shape[0])
+        msg.width = int(frame.shape[1])
+
+        if frame.ndim == 2:
+            msg.encoding = 'mono8'
+            msg.step = int(frame.shape[1])
+        elif frame.ndim == 3 and frame.shape[2] == 3:
+            msg.encoding = 'bgr8'
+            msg.step = int(frame.shape[1] * frame.shape[2])
+        else:
+            raise ValueError(f'Unsupported image shape for ROS Image message: {frame.shape}')
+
+        msg.is_bigendian = 0
+        msg.data = frame.tobytes()
         publisher.publish(msg)
 
     def _publish_state(self) -> None:
