@@ -61,17 +61,8 @@ def launch_setup(context, *args, **kwargs):
                 output='screen',
             )
         )
-        nodes.append(
-            Node(
-                package='tracker_v2',
-                executable='vesc_odom_node',
-                name='vesc_odom_node',
-                parameters=[vesc_params],
-                output='screen',
-            )
-        )
     else:
-        nodes.append(LogInfo(msg='[node_config] vesc_enabled=false - skipping VESC nodes'))
+        nodes.append(LogInfo(msg='[node_config] vesc_enabled=false - skipping VESC command node'))
 
     return nodes
 

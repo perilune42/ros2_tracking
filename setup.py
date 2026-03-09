@@ -41,7 +41,6 @@ setup(
             'tracker_camera_node = tracker_v2.tracker_camera_node:main',
             'tracker_pid_node    = tracker_v2.tracker_pid_node:main',
             'vesc_twist_node     = tracker_v2.vesc_twist_node:main',
-            'vesc_odom_node      = tracker_v2.vesc_odom_node:main',
         ],
     },
 )
