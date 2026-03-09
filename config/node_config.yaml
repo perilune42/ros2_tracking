@@ -1,0 +1,4 @@
+# Toggle major subsystems on or off at launch time.
+camera_enabled: true
+pid_enabled: true
+vesc_enabled: true
