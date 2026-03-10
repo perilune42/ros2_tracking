@@ -10,7 +10,7 @@ from std_msgs.msg import Float32MultiArray
 
 NODE_NAME = 'tracker_pid_node'
 ERROR_TOPIC = '/tracking_error'
-CMD_VEL_TOPIC = '/cmd_vel'
+DEFAULT_CMD_VEL_TOPIC = '/cmd_vel_tracker'
 
 
 class TrackerPidNode(Node):
@@ -33,6 +33,7 @@ class TrackerPidNode(Node):
                 ('lateral_dead_band', 0.05),
                 ('distance_dead_band', 0.05),
                 ('Ts', 0.10),
+                ('cmd_vel_topic', DEFAULT_CMD_VEL_TOPIC),
             ],
         )
 
@@ -49,9 +50,10 @@ class TrackerPidNode(Node):
         self.lat_db = float(self.get_parameter('lateral_dead_band').value)
         self.dist_db = float(self.get_parameter('distance_dead_band').value)
         self.Ts = float(self.get_parameter('Ts').value)
+        self.cmd_vel_topic = str(self.get_parameter('cmd_vel_topic').value)
 
         self.create_subscription(Float32MultiArray, ERROR_TOPIC, self._error_cb, 10)
-        self.cmd_pub = self.create_publisher(Twist, CMD_VEL_TOPIC, 10)
+        self.cmd_pub = self.create_publisher(Twist, self.cmd_vel_topic, 10)
 
         self._e_lat = 0.0
         self._e_dist = 0.0
@@ -66,7 +68,8 @@ class TrackerPidNode(Node):
             f'{NODE_NAME} started\n'
             f'  Steering PID : Kp={self.Kp_s} Ki={self.Ki_s} Kd={self.Kd_s}\n'
             f'  Throttle PID : Kp={self.Kp_t} Ki={self.Ki_t} Kd={self.Kd_t}\n'
-            f'  Sample time  : {self.Ts} s'
+            f'  Sample time  : {self.Ts} s\n'
+            f'  cmd_vel topic: {self.cmd_vel_topic}'
         )
 
     def _error_cb(self, msg: Float32MultiArray):

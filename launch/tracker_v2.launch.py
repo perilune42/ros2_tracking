@@ -17,11 +17,16 @@ def launch_setup(context, *args, **kwargs):
     node_config_path = os.path.join(pkg_share, 'config', 'node_config.yaml')
     tracker_params = os.path.join(pkg_share, 'config', 'tracker_params.yaml')
     vesc_params = os.path.join(pkg_share, 'config', 'vesc_params.yaml')
+    nav_params = os.path.join(pkg_share, 'config', 'nav_params.yaml')
 
     cfg = _load_yaml(node_config_path)
     camera_enabled = cfg.get('camera_enabled', True)
     pid_enabled = cfg.get('pid_enabled', True)
     vesc_enabled = cfg.get('vesc_enabled', True)
+    gps_enabled = cfg.get('gps_enabled', True)
+    search_enabled = cfg.get('search_enabled', True)
+    mode_manager_enabled = cfg.get('mode_manager_enabled', True)
+    cmd_mux_enabled = cfg.get('cmd_mux_enabled', True)
 
     nodes = []
     if camera_enabled:
@@ -50,6 +55,58 @@ def launch_setup(context, *args, **kwargs):
         )
     else:
         nodes.append(LogInfo(msg='[node_config] pid_enabled=false - skipping PID node'))
+
+    if mode_manager_enabled:
+        nodes.append(
+            Node(
+                package='tracker_v2',
+                executable='control_mode_node',
+                name='control_mode_node',
+                parameters=[nav_params],
+                output='screen',
+            )
+        )
+    else:
+        nodes.append(LogInfo(msg='[node_config] mode_manager_enabled=false - skipping mode manager'))
+
+    if gps_enabled:
+        nodes.append(
+            Node(
+                package='tracker_v2',
+                executable='gps_waypoint_node',
+                name='gps_waypoint_node',
+                parameters=[nav_params],
+                output='screen',
+            )
+        )
+    else:
+        nodes.append(LogInfo(msg='[node_config] gps_enabled=false - skipping GPS waypoint node'))
+
+    if search_enabled:
+        nodes.append(
+            Node(
+                package='tracker_v2',
+                executable='search_nav_node',
+                name='search_nav_node',
+                parameters=[nav_params],
+                output='screen',
+            )
+        )
+    else:
+        nodes.append(LogInfo(msg='[node_config] search_enabled=false - skipping search navigation node'))
+
+    if cmd_mux_enabled:
+        nodes.append(
+            Node(
+                package='tracker_v2',
+                executable='cmd_vel_mux_node',
+                name='cmd_vel_mux_node',
+                parameters=[nav_params],
+                output='screen',
+            )
+        )
+    else:
+        nodes.append(LogInfo(msg='[node_config] cmd_mux_enabled=false - skipping cmd_vel mux node'))
 
     if vesc_enabled:
         nodes.append(

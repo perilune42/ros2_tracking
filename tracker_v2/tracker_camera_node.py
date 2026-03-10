@@ -22,16 +22,17 @@ from ament_index_python.packages import get_package_share_directory
 from depthai_nodes.node import ParsingNeuralNetwork
 from geometry_msgs.msg import Point
 from rclpy.node import Node
+from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy
 from sensor_msgs.msg import Image
-from std_msgs.msg import Float32MultiArray, Int32, String
-from std_msgs.msg import Empty
+from std_msgs.msg import Empty, Float32, Float32MultiArray, Int32, String
 from ultralytics.cfg import get_cfg
 from ultralytics.trackers.bot_sort import BOTSORT
 
 NODE_NAME = 'tracker_camera_node'
 WINDOW_NAME = 'Tracker V2'
 PERSON_CLASS = 0
-INFO_PANEL_HEIGHT = 92
+INFO_PANEL_HEIGHT = 136
+CONTROL_MODES = ('IDLE', 'SEARCH', 'TRACK')
 
 COLOR_NORMAL = (0, 200, 0)
 COLOR_LOCKED = (0, 100, 255)
@@ -245,6 +246,12 @@ def _render_info_panel(
     state_machine: TargetStateMachine,
     fps: float,
     view_mode: str,
+    control_mode: str,
+    search_radius_m: float,
+    search_num_loops: int,
+    search_center: tuple[float, float],
+    search_ready: bool,
+    gps_ready: bool,
 ) -> np.ndarray:
     panel = np.full((INFO_PANEL_HEIGHT, frame.shape[1], 3), COLOR_PANEL, dtype=np.uint8)
 
@@ -269,6 +276,16 @@ def _render_info_panel(
         0.6,
         status_color,
         2,
+        cv2.LINE_AA,
+    )
+    cv2.putText(
+        panel,
+        f'Mode: {control_mode}',
+        (210, 24),
+        cv2.FONT_HERSHEY_SIMPLEX,
+        0.55,
+        COLOR_TEXT,
+        1,
         cv2.LINE_AA,
     )
     cv2.putText(
@@ -301,10 +318,37 @@ def _render_info_panel(
         1,
         cv2.LINE_AA,
     )
+    center_x, center_y = search_center
+    search_text = (
+        f'Search: R={search_radius_m:.1f}m loops={search_num_loops} '
+        f'center=({center_x:.1f}, {center_y:.1f}) '
+        f'path={"ready" if search_ready else "waiting"} '
+        f'gps={"ok" if gps_ready else "wait"}'
+    )
     cv2.putText(
         panel,
-        '[Click] Select  [C/Esc] Cancel  [V] Toggle view  [Q] Quit',
+        search_text,
         (10, 78),
+        cv2.FONT_HERSHEY_SIMPLEX,
+        0.48,
+        COLOR_TEXT,
+        1,
+        cv2.LINE_AA,
+    )
+    cv2.putText(
+        panel,
+        '[Click] Select  [M] Mode  [R] Recenter  [[/]] Radius  [-/=] Loops',
+        (10, 104),
+        cv2.FONT_HERSHEY_SIMPLEX,
+        0.48,
+        COLOR_SUBTEXT,
+        1,
+        cv2.LINE_AA,
+    )
+    cv2.putText(
+        panel,
+        '[C/Esc] Cancel  [V] Toggle view  [Q] Quit',
+        (10, 126),
         cv2.FONT_HERSHEY_SIMPLEX,
         0.48,
         COLOR_SUBTEXT,
@@ -337,6 +381,11 @@ class TrackerCameraNode(Node):
                 ('subpixel', False),
                 ('lr_check', True),
                 ('image_frame_id', 'camera_link'),
+                ('auto_acquire_in_search', True),
+                ('auto_return_to_search', True),
+                ('ui_search_radius_m', 8.0),
+                ('ui_search_radius_step_m', 1.0),
+                ('ui_search_num_loops', 3),
             ],
         )
 
@@ -353,6 +402,9 @@ class TrackerCameraNode(Node):
         self.subpixel = bool(self.get_parameter('subpixel').value)
         self.lr_check = bool(self.get_parameter('lr_check').value)
         self.image_frame_id = str(self.get_parameter('image_frame_id').value)
+        self.auto_acquire_in_search = bool(self.get_parameter('auto_acquire_in_search').value)
+        self.auto_return_to_search = bool(self.get_parameter('auto_return_to_search').value)
+        self.ui_search_radius_step_m = float(self.get_parameter('ui_search_radius_step_m').value)
 
         self.image_pub = self.create_publisher(Image, '/camera/color/image_raw', 10)
         self.raw_image_pub = self.create_publisher(Image, '/camera/color/image_raw/raw', 10)
@@ -361,9 +413,21 @@ class TrackerCameraNode(Node):
         self.error_pub = self.create_publisher(Float32MultiArray, '/tracking_error', 10)
         self.state_pub = self.create_publisher(String, '/tracker/state', 10)
         self.target_pub = self.create_publisher(Int32, '/tracker/target_id', 10)
+        self.mode_request_pub = self.create_publisher(String, '/tracker/control_mode/request', 10)
+        self.auto_track_request_pub = self.create_publisher(Empty, '/tracker/auto_track_request', 10)
+        self.auto_search_request_pub = self.create_publisher(Empty, '/tracker/auto_search_request', 10)
+        self.search_recenter_pub = self.create_publisher(Empty, '/search/recenter', 10)
+        self.search_radius_pub = self.create_publisher(Float32, '/search/set_radius', 10)
+        self.search_loops_pub = self.create_publisher(Int32, '/search/set_loops', 10)
+
+        mode_qos = QoSProfile(depth=1)
+        mode_qos.durability = DurabilityPolicy.TRANSIENT_LOCAL
+        mode_qos.reliability = ReliabilityPolicy.RELIABLE
 
         self.create_subscription(Point, '/tracker/select_point', self._select_point_cb, 10)
         self.create_subscription(Empty, '/tracker/cancel', self._cancel_cb, 10)
+        self.create_subscription(String, '/tracker/control_mode', self._control_mode_cb, mode_qos)
+        self.create_subscription(Float32MultiArray, '/search/status', self._search_status_cb, 10)
 
         self.state_machine = TargetStateMachine(self.lost_timeout_frames)
         self.mouse_state = MouseState()
@@ -373,6 +437,12 @@ class TrackerCameraNode(Node):
         self._latest_detections = []
         self._last_disparity_frame: np.ndarray | None = None
         self._prev_time = time.perf_counter()
+        self.control_mode = 'SEARCH'
+        self.search_radius_m = float(self.get_parameter('ui_search_radius_m').value)
+        self.search_num_loops = int(self.get_parameter('ui_search_num_loops').value)
+        self.search_center = (0.0, 0.0)
+        self.search_ready = False
+        self.gps_ready = False
 
         model_path = self._resolve_model_path(str(self.get_parameter('model_path').value))
         tracker_cfg_path = self._resolve_tracker_cfg_path(
@@ -489,6 +559,56 @@ class TrackerCameraNode(Node):
     def _cancel_cb(self, msg: Empty) -> None:
         self._cancel_requested = True
 
+    def _control_mode_cb(self, msg: String) -> None:
+        new_mode = str(msg.data).upper().strip() or 'IDLE'
+        if new_mode == self.control_mode:
+            return
+        self.control_mode = new_mode
+        if self.control_mode != 'TRACK':
+            self.state_machine.cancel()
+
+    def _search_status_cb(self, msg: Float32MultiArray) -> None:
+        if len(msg.data) < 6:
+            return
+        self.search_radius_m = float(msg.data[0])
+        self.search_num_loops = max(1, int(round(msg.data[1])))
+        self.search_center = (float(msg.data[2]), float(msg.data[3]))
+        self.search_ready = msg.data[4] > 0.5
+        self.gps_ready = msg.data[5] > 0.5
+
+    def _request_mode(self, mode: str) -> None:
+        msg = String()
+        msg.data = mode
+        self.mode_request_pub.publish(msg)
+
+    def _cycle_mode(self) -> None:
+        try:
+            idx = CONTROL_MODES.index(self.control_mode)
+        except ValueError:
+            idx = 0
+        self._request_mode(CONTROL_MODES[(idx + 1) % len(CONTROL_MODES)])
+
+    def _publish_search_radius(self, radius_m: float) -> None:
+        self.search_radius_m = max(1.0, radius_m)
+        msg = Float32()
+        msg.data = float(self.search_radius_m)
+        self.search_radius_pub.publish(msg)
+
+    def _publish_search_loops(self, num_loops: int) -> None:
+        self.search_num_loops = max(1, num_loops)
+        msg = Int32()
+        msg.data = int(self.search_num_loops)
+        self.search_loops_pub.publish(msg)
+
+    def _request_recenter(self) -> None:
+        self.search_recenter_pub.publish(Empty())
+
+    def _request_auto_track(self) -> None:
+        self.auto_track_request_pub.publish(Empty())
+
+    def _request_auto_search(self) -> None:
+        self.auto_search_request_pub.publish(Empty())
+
     def _consume_input_selection(self) -> tuple[int, int] | None:
         point = self._pending_select_point
         if point is not None:
@@ -496,12 +616,40 @@ class TrackerCameraNode(Node):
             return point
         return self.mouse_state.consume_tracking_click()
 
+    @staticmethod
+    def _choose_auto_target(
+        persons: list[TrackedPerson], frame_width: int, frame_height: int
+    ) -> TrackedPerson | None:
+        if not persons:
+            return None
+        center_x = frame_width / 2.0
+        center_y = frame_height / 2.0
+        return min(
+            persons,
+            key=lambda person: (
+                (person.center[0] - center_x) ** 2 + (person.center[1] - center_y) ** 2,
+                -person.confidence,
+            ),
+        )
+
     def _handle_keypress(self, key: int) -> None:
         if key == ord('q'):
             self.get_logger().info('q pressed - shutting down')
             rclpy.shutdown()
         elif key in (ord('c'), 27):
             self.state_machine.cancel()
+        elif key == ord('m'):
+            self._cycle_mode()
+        elif key == ord('r'):
+            self._request_recenter()
+        elif key == ord('['):
+            self._publish_search_radius(self.search_radius_m - self.ui_search_radius_step_m)
+        elif key == ord(']'):
+            self._publish_search_radius(self.search_radius_m + self.ui_search_radius_step_m)
+        elif key == ord('-'):
+            self._publish_search_loops(self.search_num_loops - 1)
+        elif key == ord('='):
+            self._publish_search_loops(self.search_num_loops + 1)
         elif key == ord('v'):
             self.view_mode = 'disparity' if self.view_mode == 'tracking' else 'tracking'
 
@@ -621,8 +769,27 @@ class TrackerCameraNode(Node):
             clicked_person = _find_nearest_person(selected_point[0], selected_point[1], persons)
             if clicked_person is not None:
                 self.state_machine.select_target(clicked_person.track_id, persons)
+                if self.control_mode != 'TRACK':
+                    self._request_mode('TRACK')
+        elif (
+            self.control_mode == 'SEARCH'
+            and self.auto_acquire_in_search
+            and self.state_machine.state != TrackingState.LOCKED
+        ):
+            auto_target = self._choose_auto_target(persons, width, height)
+            if auto_target is not None:
+                self.state_machine.select_target(auto_target.track_id, persons)
+                self._request_auto_track()
 
+        prev_tracking_state = self.state_machine.state
         self.state_machine.update(persons)
+        if (
+            self.control_mode == 'TRACK'
+            and self.auto_return_to_search
+            and prev_tracking_state != TrackingState.ARMED
+            and self.state_machine.state == TrackingState.ARMED
+        ):
+            self._request_auto_search()
         target = next(
             (person for person in persons if person.track_id == self.state_machine.target_id),
             None,
@@ -639,7 +806,18 @@ class TrackerCameraNode(Node):
             display = self._last_disparity_frame
 
         if self.show_info_panel:
-            debug_frame = _render_info_panel(display, self.state_machine, fps, self.view_mode)
+            debug_frame = _render_info_panel(
+                display,
+                self.state_machine,
+                fps,
+                self.view_mode,
+                self.control_mode,
+                self.search_radius_m,
+                self.search_num_loops,
+                self.search_center,
+                self.search_ready,
+                self.gps_ready,
+            )
         else:
             debug_frame = display
 
