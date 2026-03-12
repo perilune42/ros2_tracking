@@ -7,6 +7,7 @@ import time
 
 import rclpy
 from geometry_msgs.msg import PoseStamped
+from rcl_interfaces.msg import SetParametersResult
 from rclpy.node import Node
 from rclpy.qos import qos_profile_sensor_data
 from sensor_msgs.msg import NavSatFix
@@ -59,6 +60,7 @@ class GPSWaypointNode(Node):
             self._gps_callback,
             qos_profile_sensor_data,
         )
+        self.add_on_set_parameters_callback(self._on_params_changed)
 
         origin_text = (
             f'({self.origin_lat:.8f}, {self.origin_lon:.8f})'
@@ -130,6 +132,16 @@ class GPSWaypointNode(Node):
                 f' heading={math.degrees(self.current_yaw):.1f} deg'
                 f' status={msg.status.status}'
             )
+
+    def _on_params_changed(self, params) -> SetParametersResult:
+        for param in params:
+            if param.name == 'verbose_gps_logging':
+                self.verbose_gps_logging = bool(param.value)
+                self.get_logger().info(
+                    f'verbose_gps_logging set to {self.verbose_gps_logging}'
+                )
+
+        return SetParametersResult(successful=True)
 
     @staticmethod
     def _latlon_to_local_xy(lat: float, lon: float, lat0: float, lon0: float) -> tuple[float, float]:
