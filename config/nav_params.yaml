@@ -13,6 +13,7 @@ gps_waypoint_node:
     frame_id: "map"
     use_first_fix_as_origin: true
     min_motion_for_heading_m: 0.20
+    verbose_gps_logging: false
 
 search_nav_node:
   ros__parameters:
@@ -33,7 +34,7 @@ search_nav_node:
     search_speed: 0.25
     max_steering_angle: 0.55
     control_hz: 10.0
-    pose_timeout_s: 1.0
+    pose_timeout_s: 3.0
     auto_center_on_first_pose: true
 
 cmd_vel_mux_node:

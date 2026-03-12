@@ -8,6 +8,7 @@ import time
 import rclpy
 from geometry_msgs.msg import PoseStamped
 from rclpy.node import Node
+from rclpy.qos import qos_profile_sensor_data
 from sensor_msgs.msg import NavSatFix
 
 NODE_NAME = 'gps_waypoint_node'
@@ -32,6 +33,7 @@ class GPSWaypointNode(Node):
                 ('origin_lat', float('nan')),
                 ('origin_lon', float('nan')),
                 ('min_motion_for_heading_m', 0.25),
+                ('verbose_gps_logging', False),
             ],
         )
 
@@ -42,6 +44,7 @@ class GPSWaypointNode(Node):
         self.origin_lat = float(self.get_parameter('origin_lat').value)
         self.origin_lon = float(self.get_parameter('origin_lon').value)
         self.min_motion_for_heading_m = float(self.get_parameter('min_motion_for_heading_m').value)
+        self.verbose_gps_logging = bool(self.get_parameter('verbose_gps_logging').value)
 
         self.origin_ready = not (math.isnan(self.origin_lat) or math.isnan(self.origin_lon))
         self.current_yaw = 0.0
@@ -50,7 +53,12 @@ class GPSWaypointNode(Node):
         self._last_invalid_fix_warn = 0.0
 
         self.pose_pub = self.create_publisher(PoseStamped, self.pose_topic, 10)
-        self.create_subscription(NavSatFix, self.gps_topic, self._gps_callback, 10)
+        self.create_subscription(
+            NavSatFix,
+            self.gps_topic,
+            self._gps_callback,
+            qos_profile_sensor_data,
+        )
 
         origin_text = (
             f'({self.origin_lat:.8f}, {self.origin_lon:.8f})'
@@ -62,6 +70,7 @@ class GPSWaypointNode(Node):
             f'\n  gps_topic: {self.gps_topic}'
             f'\n  pose_topic: {self.pose_topic}'
             f'\n  local origin: {origin_text}'
+            f'\n  verbose_gps_logging: {self.verbose_gps_logging}'
         )
 
     def _gps_callback(self, msg: NavSatFix) -> None:
@@ -110,6 +119,17 @@ class GPSWaypointNode(Node):
         pose_msg.pose.orientation.z = qz
         pose_msg.pose.orientation.w = qw
         self.pose_pub.publish(pose_msg)
+
+        if self.verbose_gps_logging:
+            self.get_logger().info(
+                'GPS fix'
+                f' lat={lat:.8f}'
+                f' lon={lon:.8f}'
+                f' local_x={x:.2f} m'
+                f' local_y={y:.2f} m'
+                f' heading={math.degrees(self.current_yaw):.1f} deg'
+                f' status={msg.status.status}'
+            )
 
     @staticmethod
     def _latlon_to_local_xy(lat: float, lon: float, lat0: float, lon0: float) -> tuple[float, float]:
