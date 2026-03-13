@@ -82,3 +82,14 @@ Fix the pyvesc package by commenting out lines 41 and 42 in `.venv/lib/python3.1
         # if int(version.split('.')[0]) < 3:       <- This line
         #    GetValues.fields = pre_v3_33_fields   <- This line
 ```
+
+
+To be able to include packages when building:
+
+```bash
+source /home/projects/ros2_ws/.venv/bin/activate
+```
+Then actually build and re source
+```bash
+colcon build --symlink-install && source /opt/ros/$ROS_DISTRO/setup.bash && source /home/projects/ros2_ws/.venv/bin/activate && source /home/projects/ros2_ws/install/setup.bash && ros2 launch tracker_v2 tracker_v2.launch.py
+```
