@@ -35,6 +35,8 @@ class GPSWaypointNode(Node):
                 ('origin_lon', float('nan')),
                 ('min_motion_for_heading_m', 0.25),
                 ('verbose_gps_logging', False),
+                ('republish_last_pose_hz', 5.0),
+                ('max_pose_hold_s', 15.0),
             ],
         )
 
@@ -46,12 +48,16 @@ class GPSWaypointNode(Node):
         self.origin_lon = float(self.get_parameter('origin_lon').value)
         self.min_motion_for_heading_m = float(self.get_parameter('min_motion_for_heading_m').value)
         self.verbose_gps_logging = bool(self.get_parameter('verbose_gps_logging').value)
+        self.republish_last_pose_hz = float(self.get_parameter('republish_last_pose_hz').value)
+        self.max_pose_hold_s = float(self.get_parameter('max_pose_hold_s').value)
 
         self.origin_ready = not (math.isnan(self.origin_lat) or math.isnan(self.origin_lon))
         self.current_yaw = 0.0
         self.prev_x = None
         self.prev_y = None
         self._last_invalid_fix_warn = 0.0
+        self._last_valid_pose_time = 0.0
+        self._last_pose_msg = None
 
         self.pose_pub = self.create_publisher(PoseStamped, self.pose_topic, 10)
         self.create_subscription(
@@ -61,6 +67,10 @@ class GPSWaypointNode(Node):
             qos_profile_sensor_data,
         )
         self.add_on_set_parameters_callback(self._on_params_changed)
+        self.create_timer(
+            1.0 / max(self.republish_last_pose_hz, 1e-3),
+            self._republish_last_pose,
+        )
 
         origin_text = (
             f'({self.origin_lat:.8f}, {self.origin_lon:.8f})'
@@ -73,6 +83,8 @@ class GPSWaypointNode(Node):
             f'\n  pose_topic: {self.pose_topic}'
             f'\n  local origin: {origin_text}'
             f'\n  verbose_gps_logging: {self.verbose_gps_logging}'
+            f'\n  republish_last_pose_hz: {self.republish_last_pose_hz:.2f}'
+            f'\n  max_pose_hold_s: {self.max_pose_hold_s:.2f}'
         )
 
     def _gps_callback(self, msg: NavSatFix) -> None:
@@ -120,7 +132,7 @@ class GPSWaypointNode(Node):
         pose_msg.pose.orientation.y = qy
         pose_msg.pose.orientation.z = qz
         pose_msg.pose.orientation.w = qw
-        self.pose_pub.publish(pose_msg)
+        self._publish_pose(pose_msg)
 
         if self.verbose_gps_logging:
             self.get_logger().info(
@@ -142,6 +154,25 @@ class GPSWaypointNode(Node):
                 )
 
         return SetParametersResult(successful=True)
+
+    def _publish_pose(self, pose_msg: PoseStamped) -> None:
+        self._last_pose_msg = pose_msg
+        self._last_valid_pose_time = time.monotonic()
+        self.pose_pub.publish(pose_msg)
+
+    def _republish_last_pose(self) -> None:
+        if self._last_pose_msg is None:
+            return
+
+        age_s = time.monotonic() - self._last_valid_pose_time
+        if age_s > self.max_pose_hold_s:
+            return
+
+        pose_msg = PoseStamped()
+        pose_msg.header.stamp = self.get_clock().now().to_msg()
+        pose_msg.header.frame_id = self._last_pose_msg.header.frame_id
+        pose_msg.pose = self._last_pose_msg.pose
+        self.pose_pub.publish(pose_msg)
 
     @staticmethod
     def _latlon_to_local_xy(lat: float, lon: float, lat0: float, lon0: float) -> tuple[float, float]:
