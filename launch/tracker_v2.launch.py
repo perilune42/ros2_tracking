@@ -20,6 +20,9 @@ def launch_setup(context, *args, **kwargs):
     nav_params = os.path.join(pkg_share, 'config', 'nav_params.yaml')
 
     cfg = _load_yaml(node_config_path)
+    nav_cfg = _load_yaml(nav_params)
+    gps_bridge_params = nav_cfg.get('gps_runner_bridge_node', {}).get('ros__parameters', {})
+    gps_runner_command = str(gps_bridge_params.get('runner_command', '')).strip()
     camera_enabled = cfg.get('camera_enabled', True)
     pid_enabled = cfg.get('pid_enabled', True)
     vesc_enabled = cfg.get('vesc_enabled', True)
@@ -81,6 +84,19 @@ def launch_setup(context, *args, **kwargs):
         )
     else:
         nodes.append(LogInfo(msg='[node_config] gps_enabled=false - skipping GPS waypoint node'))
+
+    if gps_runner_command:
+        nodes.append(
+            Node(
+                package='tracker_v2',
+                executable='gps_runner_bridge_node',
+                name='gps_runner_bridge_node',
+                parameters=[nav_params],
+                output='screen',
+            )
+        )
+    else:
+        nodes.append(LogInfo(msg='[nav_params] gps runner command empty - skipping GPS runner bridge'))
 
     if search_enabled:
         nodes.append(

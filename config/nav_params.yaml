@@ -15,6 +15,15 @@ gps_waypoint_node:
     min_motion_for_heading_m: 0.20
     verbose_gps_logging: false
 
+gps_runner_bridge_node:
+  ros__parameters:
+    fix_topic: "/fix"
+    frame_id: "gps"
+    runner_command: ""
+    restart_delay_s: 2.0
+    publish_invalid_fixes: false
+    verbose_runner_output: false
+
 search_nav_node:
   ros__parameters:
     pose_topic: "/gps/local_pose"
