@@ -22,7 +22,12 @@ def launch_setup(context, *args, **kwargs):
     cfg = _load_yaml(node_config_path)
     nav_cfg = _load_yaml(nav_params)
     gps_bridge_params = nav_cfg.get('gps_runner_bridge_node', {}).get('ros__parameters', {})
-    gps_runner_command = str(gps_bridge_params.get('runner_command', '')).strip()
+    gps_runner_command = str(
+        os.environ.get(
+            'TRACKER_V2_GPS_RUNNER_COMMAND',
+            gps_bridge_params.get('runner_command', ''),
+        )
+    ).strip()
     camera_enabled = cfg.get('camera_enabled', True)
     pid_enabled = cfg.get('pid_enabled', True)
     vesc_enabled = cfg.get('vesc_enabled', True)
@@ -96,7 +101,12 @@ def launch_setup(context, *args, **kwargs):
             )
         )
     else:
-        nodes.append(LogInfo(msg='[nav_params] gps runner command empty - skipping GPS runner bridge'))
+        nodes.append(
+            LogInfo(
+                msg='[nav_params] gps runner command empty - skipping GPS runner bridge '
+                '(set gps_runner_bridge_node.runner_command or TRACKER_V2_GPS_RUNNER_COMMAND)'
+            )
+        )
 
     if search_enabled:
         nodes.append(
