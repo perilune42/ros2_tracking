@@ -65,6 +65,7 @@ class GPSWaypointNode(Node):
         )
 
     def _gps_callback(self, msg: NavSatFix) -> None:
+        self.get_logger().info("Hi!")
         if msg.status.status < 0:
             now = time.monotonic()
             if now - self._last_invalid_fix_warn > 5.0:
@@ -109,6 +110,7 @@ class GPSWaypointNode(Node):
         pose_msg.pose.orientation.y = qy
         pose_msg.pose.orientation.z = qz
         pose_msg.pose.orientation.w = qw
+        self.get_logger().info(f"x={x},y={y}")
         self.pose_pub.publish(pose_msg)
 
     @staticmethod

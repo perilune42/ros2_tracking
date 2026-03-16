@@ -1,8 +1,8 @@
 # Toggle major subsystems on or off at launch time.
-camera_enabled: true
-pid_enabled: true
-vesc_enabled: true
+camera_enabled: false
+pid_enabled: false
+vesc_enabled: false
 gps_enabled: true
-search_enabled: true
-mode_manager_enabled: true
-cmd_mux_enabled: true
+search_enabled: false
+mode_manager_enabled: false
+cmd_mux_enabled: false

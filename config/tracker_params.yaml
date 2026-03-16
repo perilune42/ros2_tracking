@@ -3,7 +3,7 @@ tracker_camera_node:
     fps_limit: 10
     lost_timeout_frames: 30
     target_box_fraction: 0.40
-    model_path: ""
+    model_path: "/home/projects/ros2_ws/src/ros2_tracking/models/yolo26n.rvc2.tar.xz"
     tracker_cfg_path: ""
     enable_gui: true
     show_info_panel: true

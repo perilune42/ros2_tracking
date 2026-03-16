@@ -46,6 +46,7 @@ setup(
             'control_mode_node   = tracker_v2.control_mode_node:main',
             'cmd_vel_mux_node    = tracker_v2.cmd_vel_mux_node:main',
             'vesc_twist_node     = tracker_v2.vesc_twist_node:main',
+            'gps_publisher       = tracker_v2.gps_publisher:main'
         ],
     },
 )
