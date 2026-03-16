@@ -85,6 +85,7 @@ class SearchNavNode(Node):
         self.path_x = np.array([], dtype=np.float64)
         self.path_y = np.array([], dtype=np.float64)
         self._last_pose_time = 0.0
+        self._last_wait_warn_time = 0.0
 
         self.cmd_pub = self.create_publisher(Twist, self.cmd_topic, 10)
         self.path_pub = self.create_publisher(Path, self.path_topic, 10)
@@ -109,6 +110,7 @@ class SearchNavNode(Node):
             f'\n  loops={self.num_loops}'
             f'\n  lookahead={self.lookahead_m:.2f} m'
             f'\n  speed={self.search_speed:.2f}'
+            f'\n  pose_timeout_s={self.pose_timeout_s:.2f}'
         )
 
     def _pose_cb(self, msg: PoseStamped) -> None:
@@ -222,6 +224,7 @@ class SearchNavNode(Node):
             return
 
         if not self.path_ready or not self._pose_is_fresh():
+            self._log_wait_reason()
             self.cmd_pub.publish(cmd)
             return
 
@@ -240,6 +243,27 @@ class SearchNavNode(Node):
 
     def _pose_is_fresh(self) -> bool:
         return self.pose_ready and (time.monotonic() - self._last_pose_time) <= self.pose_timeout_s
+
+    def _log_wait_reason(self) -> None:
+        now = time.monotonic()
+        if (now - self._last_wait_warn_time) < 5.0:
+            return
+
+        if not self.pose_ready:
+            message = 'Search paused: waiting for /gps/local_pose'
+        elif not self._pose_is_fresh():
+            age_s = now - self._last_pose_time
+            message = (
+                'Search paused: local pose is stale '
+                f'({age_s:.2f}s old, timeout={self.pose_timeout_s:.2f}s)'
+            )
+        elif not self.path_ready:
+            message = 'Search paused: search path is not initialized yet'
+        else:
+            message = 'Search paused: waiting for search navigation prerequisites'
+
+        self.get_logger().warn(message)
+        self._last_wait_warn_time = now
 
     def _pure_pursuit(
         self,

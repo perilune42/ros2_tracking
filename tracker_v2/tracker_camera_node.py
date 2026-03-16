@@ -17,7 +17,7 @@ import cv2
 import depthai as dai
 import numpy as np
 import rclpy
-import ultralytics
+# import ultralytics
 from ament_index_python.packages import get_package_share_directory
 from depthai_nodes.node import ParsingNeuralNetwork
 from geometry_msgs.msg import Point
@@ -25,8 +25,8 @@ from rclpy.node import Node
 from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy
 from sensor_msgs.msg import Image
 from std_msgs.msg import Empty, Float32, Float32MultiArray, Int32, String
-from ultralytics.cfg import get_cfg
-from ultralytics.trackers.bot_sort import BOTSORT
+# from ultralytics.cfg import get_cfg
+# from ultralytics.trackers.bot_sort import BOTSORT
 
 NODE_NAME = 'tracker_camera_node'
 WINDOW_NAME = 'Tracker V2'
@@ -168,6 +168,23 @@ def _tracks_to_persons(tracks) -> list[TrackedPerson]:
                 track_id=int(track[4]),
                 bbox=(x1, y1, x2, y2),
                 confidence=float(track[5]),
+            )
+        )
+    return persons
+
+
+def _detections_to_persons(detections, width: int, height: int) -> list[TrackedPerson]:
+    persons: list[TrackedPerson] = []
+    for idx, det in enumerate(detections):
+        x1 = int(det.xmin * width)
+        y1 = int(det.ymin * height)
+        x2 = int(det.xmax * width)
+        y2 = int(det.ymax * height)
+        persons.append(
+            TrackedPerson(
+                track_id=idx,
+                bbox=(x1, y1, x2, y2),
+                confidence=float(det.confidence),
             )
         )
     return persons
@@ -445,11 +462,10 @@ class TrackerCameraNode(Node):
         self.gps_ready = False
 
         model_path = self._resolve_model_path(str(self.get_parameter('model_path').value))
-        tracker_cfg_path = self._resolve_tracker_cfg_path(
-            str(self.get_parameter('tracker_cfg_path').value)
-        )
-
-        self._tracker = BOTSORT(get_cfg(tracker_cfg_path), frame_rate=self.fps_limit)
+        # tracker_cfg_path = self._resolve_tracker_cfg_path(
+        #     str(self.get_parameter('tracker_cfg_path').value)
+        # )
+        # self._tracker = BOTSORT(get_cfg(tracker_cfg_path), frame_rate=self.fps_limit)
         self._exit_stack = ExitStack()
         self._device = dai.Device()
         self.get_logger().info(f'OAK-D platform: {self._device.getPlatformAsString()}')
@@ -749,20 +765,21 @@ class TrackerCameraNode(Node):
         fps = 1.0 / max(now - self._prev_time, 1e-6)
         self._prev_time = now
 
-        boxes = _Boxes(
-            [
-                [
-                    det.xmin * width,
-                    det.ymin * height,
-                    det.xmax * width,
-                    det.ymax * height,
-                ]
-                for det in self._latest_detections
-            ],
-            [det.confidence for det in self._latest_detections],
-            [PERSON_CLASS] * len(self._latest_detections),
-        )
-        persons = _tracks_to_persons(self._tracker.update(boxes, frame))
+        # boxes = _Boxes(
+        #     [
+        #         [
+        #             det.xmin * width,
+        #             det.ymin * height,
+        #             det.xmax * width,
+        #             det.ymax * height,
+        #         ]
+        #         for det in self._latest_detections
+        #     ],
+        #     [det.confidence for det in self._latest_detections],
+        #     [PERSON_CLASS] * len(self._latest_detections),
+        # )
+        # persons = _tracks_to_persons(self._tracker.update(boxes, frame))
+        persons = _detections_to_persons(self._latest_detections, width, height)
 
         selected_point = self._consume_input_selection()
         if selected_point is not None:
