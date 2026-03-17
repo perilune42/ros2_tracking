@@ -165,8 +165,12 @@ class GpsPublisher(Node):
         # ── Timer – poll serial at ~10 Hz, GPS sentences arrive ~1 Hz ──
         # The donkeycar part reads in a tight loop; we use a timer instead
         # so the ROS2 event loop stays responsive.
-        self._timer = self.create_timer(0.1, self._read_and_publish)
 
+        self.origin_is_set = False
+        self.origin_x = 0.0
+        self.origin_y = 0.0
+
+        self._timer = self.create_timer(0.05, self._read_and_publish)
         self.get_logger().info("GPS publisher ready – waiting for fix...")
 
     # ──────────────────────────────────────────────────────────
@@ -202,13 +206,26 @@ class GpsPublisher(Node):
         # donkeycar returns positions[-1] (most recent)
         ts, easting, northing = positions[-1]
 
+        lx = 0.0
+        ly = 0.0
+        if not self.origin_is_set:
+            self.origin_x = easting
+            self.origin_y = northing
+            self.origin_is_set = True
+            self.get_logger().info(
+                f"Origin set to {easting:.2f}, {northing:.2f}"
+            )
+        else:
+            lx = easting - self.origin_x
+            ly = northing - self.origin_y
+
         msg = Float64MultiArray()
-        msg.data = [easting, northing, ts]
+        msg.data = [lx, ly, ts]
         self._pub.publish(msg)
 
         if self._debug:
             self.get_logger().info(
-                f"Published  easting={easting:.2f}  northing={northing:.2f}"
+                f"Published  lx={lx:.2f}  ly={ly:.2f}"
             )
 
     # ──────────────────────────────────────────────────────────

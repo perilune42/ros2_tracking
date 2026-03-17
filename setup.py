@@ -18,6 +18,7 @@ setup(
         (os.path.join('share', package_name, 'launch'), glob('launch/*.launch.py')),
         (os.path.join('share', package_name, 'config'), glob('config/*.yaml')),
         (os.path.join('share', package_name, 'models'), glob('models/*')),
+        (os.path.join('share', package_name, 'path'), glob('path/*')),
     ],
     install_requires=[
         'setuptools',
@@ -47,7 +48,8 @@ setup(
             'control_mode_node   = tracker_v2.control_mode_node:main',
             'cmd_vel_mux_node    = tracker_v2.cmd_vel_mux_node:main',
             'vesc_twist_node     = tracker_v2.vesc_twist_node:main',
-            'gps_publisher       = tracker_v2.gps_publisher:main'
+            'gps_publisher       = tracker_v2.gps_publisher:main',
+            'yolo_oakd_tracking  = tracker_v2.yolo_oakd_tracking:main'
         ],
     },
 )
