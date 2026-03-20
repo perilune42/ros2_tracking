@@ -49,7 +49,8 @@ setup(
             'cmd_vel_mux_node    = tracker_v2.cmd_vel_mux_node:main',
             'vesc_twist_node     = tracker_v2.vesc_twist_node:main',
             'gps_publisher       = tracker_v2.gps_publisher:main',
-            'yolo_oakd_tracking  = tracker_v2.yolo_oakd_tracking:main'
+            'yolo_oakd_tracking  = tracker_v2.yolo_oakd_tracking:main',
+            'gps_path_follow_node = tracker_v2.gps_path_follow_node:main'
         ],
     },
 )

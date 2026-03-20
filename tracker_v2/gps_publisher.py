@@ -28,6 +28,9 @@ from std_msgs.msg import Float64MultiArray
 import serial
 import utm
 
+from ament_index_python.packages import get_package_share_directory
+import os
+import csv
 
 # ──────────────────────────────────────────────────────────────
 #  Pure parsing helpers  (direct port from donkeycar gps.py)
@@ -131,6 +134,9 @@ def parse_gps_position(line: str, logger=None):
     return float(utm_position[0]), float(utm_position[1])
 
 
+
+CSV_HEADER = ["easting", "northing", "timestamp"]
+
 # ──────────────────────────────────────────────────────────────
 #  ROS2 node
 # ──────────────────────────────────────────────────────────────
@@ -155,6 +161,16 @@ class GpsPublisher(Node):
         timeout = self.get_parameter("timeout_sec").value
         self._debug = self.get_parameter("debug").value
 
+        self._csv_path = os.path.join(
+            get_package_share_directory("tracker_v2"),
+            "path", "waypoints.csv"
+        )
+        self.toggle_record = False
+        self._waypoint_index = 0
+        self._current_pos = None
+        self._csv_file = None
+        self._csv_writer = None
+
         # ── Publisher ──────────────────────────────────────────
         self._pub = self.create_publisher(Float64MultiArray, "/gps/utm", 10)
 
@@ -172,6 +188,10 @@ class GpsPublisher(Node):
 
         self._timer = self.create_timer(0.05, self._read_and_publish)
         self.get_logger().info("GPS publisher ready – waiting for fix...")
+
+        if (self.toggle_record):
+            self._open_csv()
+            self.get_logger().info("Recording started")
 
     # ──────────────────────────────────────────────────────────
     def _read_and_publish(self):
@@ -228,11 +248,45 @@ class GpsPublisher(Node):
                 f"Published  lx={lx:.2f}  ly={ly:.2f}"
             )
 
+        if self.toggle_record:
+            self._write_waypoint(lx, ly, ts)
+
+
+    def _open_csv(self):
+        """Open (or append to) the CSV file and write the header if new."""
+        os.makedirs(os.path.dirname(self._csv_path), exist_ok=True)
+        file_exists = os.path.isfile(self._csv_path)
+
+        self._csv_file   = open(self._csv_path, "a", newline="")
+        self._csv_writer = csv.DictWriter(self._csv_file, fieldnames=CSV_HEADER)
+
+        if not file_exists:
+            self._csv_writer.writeheader()
+
+        self.get_logger().info(f"CSV {'appending to' if file_exists else 'created'}: {self._csv_path}")
+
+    def _write_waypoint(self, lx: float, ly: float, ts: float):
+        """Write a single row to the open CSV file."""
+        self._waypoint_index += 1
+        self._csv_writer.writerow({
+            "easting":     round(lx,  4),
+            "northing":    round(ly, 4),
+            "timestamp":   ts
+        })
+        self._csv_file.flush()   # don't lose data if the node dies
+
+    def _close_csv(self):
+        if self._csv_file:
+            self._csv_file.close()
+            self._csv_file   = None
+            self._csv_writer = None
+
     # ──────────────────────────────────────────────────────────
     def destroy_node(self):
         self.get_logger().info("Shutting down GPS publisher")
         if self._serial and self._serial.is_open:
             self._serial.close()
+        self._close_csv()
         super().destroy_node()
 
 

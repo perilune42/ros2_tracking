@@ -117,12 +117,14 @@ class YoloOakdTracking(Node):
                 cv2.putText(frame, f"Y: {(t.spatialCoordinates.y / 1000):.2f} m", (x1 + 10, y1 + 80), cv2.FONT_HERSHEY_TRIPLEX, 0.5, 255)
                 cv2.putText(frame, f"Z: {(t.spatialCoordinates.z / 1000):.2f} m", (x1 + 10, y1 + 95), cv2.FONT_HERSHEY_TRIPLEX, 0.5, 255)
 
+        msg = Float64MultiArray()
         if trackletsData:
             sc = trackletsData[0].spatialCoordinates
-            msg = Float64MultiArray()
             msg.data = [sc.x/1000.0, sc.y/1000.0, sc.z/1000.0]
-            self.pub.publish(msg)
             self.get_logger().info(f"Detected object at: ({sc.x/1000:.2f}.{sc.y/1000:.2f},{sc.z/1000:.2f})")
+        else:
+            msg.data = []
+        self.pub.publish(msg)
 
         if self.show_window:
             cv2.putText(frame, "NN fps: {:.2f}".format(self.fps), (2, frame.shape[0] - 4), cv2.FONT_HERSHEY_TRIPLEX, 0.4, self.color)

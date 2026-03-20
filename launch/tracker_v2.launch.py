@@ -28,126 +28,22 @@ def launch_setup(context, *args, **kwargs):
             gps_bridge_params.get('runner_command', ''),
         )
     ).strip()
-    gps_udp_params = nav_cfg.get('gps_udp_bridge_node', {}).get('ros__parameters', {})
-    gps_udp_port = int(gps_udp_params.get('listen_port', 0))
-    camera_enabled = cfg.get('camera_enabled', True)
-    pid_enabled = cfg.get('pid_enabled', True)
     vesc_enabled = cfg.get('vesc_enabled', True)
     gps_enabled = cfg.get('gps_enabled', True)
-    search_enabled = cfg.get('search_enabled', True)
-    mode_manager_enabled = cfg.get('mode_manager_enabled', True)
-    cmd_mux_enabled = cfg.get('cmd_mux_enabled', True)
 
     nodes = []
-    if camera_enabled:
+    if True:
         nodes.append(
             Node(
                 package='tracker_v2',
-                executable='tracker_camera_node',
-                name='tracker_camera_node',
-                parameters=[tracker_params],
-                output='screen',
-                additional_env={'DISPLAY': os.environ.get('DISPLAY', ':0')},
-            )
-        )
-    else:
-        nodes.append(LogInfo(msg='[node_config] camera_enabled=false - skipping tracker camera node'))
-
-    if pid_enabled:
-        nodes.append(
-            Node(
-                package='tracker_v2',
-                executable='tracker_pid_node',
-                name='tracker_pid_node',
-                parameters=[tracker_params],
-                output='screen',
-            )
-        )
-    else:
-        nodes.append(LogInfo(msg='[node_config] pid_enabled=false - skipping PID node'))
-
-    if mode_manager_enabled:
-        nodes.append(
-            Node(
-                package='tracker_v2',
-                executable='control_mode_node',
-                name='control_mode_node',
-                parameters=[nav_params],
-                output='screen',
-            )
-        )
-    else:
-        nodes.append(LogInfo(msg='[node_config] mode_manager_enabled=false - skipping mode manager'))
-
-    if gps_enabled:
-        nodes.append(
-            Node(
-                package='tracker_v2',
-                executable='gps_waypoint_node',
-                name='gps_waypoint_node',
-                parameters=[nav_params],
+                executable='gps_publisher',
+                name='gps_publisher',
+                parameters=[],
                 output='screen',
             )
         )
     else:
         nodes.append(LogInfo(msg='[node_config] gps_enabled=false - skipping GPS waypoint node'))
-
-    if gps_runner_command:
-        nodes.append(
-            Node(
-                package='tracker_v2',
-                executable='gps_runner_bridge_node',
-                name='gps_runner_bridge_node',
-                parameters=[nav_params],
-                output='screen',
-            )
-        )
-    else:
-        nodes.append(
-            LogInfo(
-                msg='[nav_params] gps runner command empty - skipping GPS runner bridge '
-                '(set gps_runner_bridge_node.runner_command or TRACKER_V2_GPS_RUNNER_COMMAND)'
-            )
-        )
-
-    if gps_udp_port > 0:
-        nodes.append(
-            Node(
-                package='tracker_v2',
-                executable='gps_udp_bridge_node',
-                name='gps_udp_bridge_node',
-                parameters=[nav_params],
-                output='screen',
-            )
-        )
-    else:
-        nodes.append(LogInfo(msg='[nav_params] gps UDP bridge port <= 0 - skipping GPS UDP bridge'))
-
-    if search_enabled:
-        nodes.append(
-            Node(
-                package='tracker_v2',
-                executable='search_nav_node',
-                name='search_nav_node',
-                parameters=[nav_params],
-                output='screen',
-            )
-        )
-    else:
-        nodes.append(LogInfo(msg='[node_config] search_enabled=false - skipping search navigation node'))
-
-    if cmd_mux_enabled:
-        nodes.append(
-            Node(
-                package='tracker_v2',
-                executable='cmd_vel_mux_node',
-                name='cmd_vel_mux_node',
-                parameters=[nav_params],
-                output='screen',
-            )
-        )
-    else:
-        nodes.append(LogInfo(msg='[node_config] cmd_mux_enabled=false - skipping cmd_vel mux node'))
 
     if vesc_enabled:
         nodes.append(
@@ -161,6 +57,26 @@ def launch_setup(context, *args, **kwargs):
         )
     else:
         nodes.append(LogInfo(msg='[node_config] vesc_enabled=false - skipping VESC command node'))
+
+    nodes.append(
+        Node(
+            package='tracker_v2',
+            executable='gps_path_follow_node',
+            name='gps_path_follow_node',
+            parameters=[],
+            output='screen',
+        )
+    )
+
+    nodes.append(
+        Node(
+            package='tracker_v2',
+            executable='yolo_oakd_tracking',
+            name='yolo_oakd_tracking',
+            parameters=[],
+            output='screen',
+        )
+    )
 
     return nodes
 

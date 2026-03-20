@@ -12,7 +12,7 @@ class VESC_:
         self.serial_port = '/dev/ttyACM0'
         self.baudrate = 115200
         self.is_inverted = False
-        self.has_sensor = False
+        self.has_sensor = True
         self.start_heartbeat = True
         print('Connecting to VESC...')
         try:
