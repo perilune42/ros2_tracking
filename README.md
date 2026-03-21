@@ -10,6 +10,8 @@ Inside the tracker_v2 folder:
 
 To run, simply run the launch_ros2 bash command (which you can inspect in ~/.bashrc), which builds and sources everything necessary. 
 
+Our trained YOLO model is located in the models folder as model.rvc2.tar.xz, and is used in the yolo_oakd_tracking node. Details for the YOLO model training are located in another repository: https://github.com/arushbisht12/mae148_team1_2026
+
 # Docker Setup
 
 (originally written by Team 7)
