@@ -1,3 +1,19 @@
+# Repository Contents
+This is part of Team 1's final project for MAE/ECE 148 WI26, and is based off of Team 7's project. The repository is already set up in the public docker container.
+
+This repository contains a ROS2 package used for combining GPS and OAK-D object tracking outputs to follow a GPS path using VESC controls while overtaking opponent robocars.
+
+Inside the tracker_v2 folder:
+- gps_publisher, yolo_oakd_tracking, and gps_path_follow_node are created by our team
+- vesc_twist_node and the accompanying vesc submodule are created by Team 7
+- only these 4 nodes are used, the rest are created by Team 7 and are not used for our project.
+
+To run, simply run the launch_ros2 bash command (which you can inspect in ~/.bashrc), which builds and sources everything necessary. 
+
+# Docker Setup
+
+(originally written by Team 7)
+
 Assuming x11 installed and working on RPI and Laptop
 
 
@@ -18,7 +34,7 @@ sudo udevadm control --reload-rules && sudo udevadm trigger
 
 pull docker container:
 ```bash
-docker pull algrish2/ros2-kilted:ver-2-with-final-proj
+docker pull perilune/ros2_robocar_tracking:final_proj
 ```
 
 proper docker command:
@@ -35,61 +51,6 @@ docker run \
     --volume="$HOME/.Xauthority:/root/.Xauthority:rw" \
     --volume /etc/passwd:/etc/passwd:ro \
     --volume /etc/group:/etc/group:ro \
-    algrish2/ros2-kilted:ver-2-with-final-proj
+    perilune/ros2_robocar_tracking:final_proj
 ```
 
-
-install uv 
-
-```bash
-curl -LsSf https://astral.sh/uv/install.sh | sh
-```
-
-clone repo into src:
-
-```bash
-cd /home/projects/ros2_ws/src
-git clone https://github.com/grishnakov/ros2_tracking.git
-cd ..
-```
-
-install proper venv for this project/package.
-```bash
-cd /home/projects/ros2_ws
-uv venv .venv --seed
-source .venv/bin/activate
-uv add \
-  colcon-common-extensions \
-  numpy \
-  opencv-python \
-  PyYAML \
-  depthai \
-  depthai-nodes \
-  lap \
-  ultralytics \
-  "git+https://github.com/LiamBindle/PyVESC" \
-  pyserial
-```
-
-
-Fix the pyvesc package by commenting out lines 41 and 42 in `.venv/lib/python3.12/site-packages/pyvesc/VESC/VESC.py`
-
-
-```python
-
-        # check firmware version and set GetValue fields to old values if pre version 3.xx
-        version = self.get_firmware_version()
-        # if int(version.split('.')[0]) < 3:       <- This line
-        #    GetValues.fields = pre_v3_33_fields   <- This line
-```
-
-
-To be able to include packages when building:
-
-```bash
-source /home/projects/ros2_ws/.venv/bin/activate
-```
-Then actually build and re source
-```bash
-colcon build --symlink-install && source /opt/ros/$ROS_DISTRO/setup.bash && source /home/projects/ros2_ws/.venv/bin/activate && source /home/projects/ros2_ws/install/setup.bash && ros2 launch tracker_v2 tracker_v2.launch.py
-```
